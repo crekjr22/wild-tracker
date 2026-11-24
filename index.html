@@ -128,7 +128,7 @@ th.sort{cursor:pointer} th.sort.on{color:var(--ink)}
   <button data-t="home" class="on"><svg viewBox="0 0 24 24"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>Home</button>
   <button data-t="standings"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg>Standings</button>
   <button data-t="league"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.5 2.5 2.5 14.5 0 17M12 3.5c-2.5 2.5-2.5 14.5 0 17"/></svg>League</button>
-  <button data-t="ranks"><svg viewBox="0 0 24 24"><path d="M5 20V11M12 20V4M19 20v-6"/></svg>Ranks</button>
+  <button data-t="ranks"><svg viewBox="0 0 24 24"><path d="M5 20V11M12 20V4M19 20v-6"/></svg>Stats</button>
   <button data-t="players"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19c.6-3.2 2.8-5 5.5-5s4.9 1.8 5.5 5"/><circle cx="17" cy="9" r="2.5"/><path d="M15.5 14.2c2.4-.3 4.4 1.2 5 4.8"/></svg>Players</button>
   <button data-t="schedule"><svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15" rx="2"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>Schedule</button>
 </nav>
@@ -202,6 +202,7 @@ function home(){
   if (D.recent.length){
     h += `<div class="card"><h2>Last 3</h2>` + D.recent.slice(0,3).map(schedRow).join("") + `</div>`;
   }
+  h += injuryCard();
   // Scorers
   if (D.skaters.length){
     h += `<div class="card"><div class="row"><h2 class="grow">Top scorers</h2><a class="small" style="color:var(--muted)" href="#" onclick="document.querySelector('nav button[data-t=players]').click();return false">All players ›</a></div><table><tr><th>Player</th><th>GP</th><th>G</th><th>A</th><th>P</th><th>+/-</th></tr>` +
@@ -299,25 +300,87 @@ function players(){
     cols.map(([k,l]) => `<th class="sort ${pSort===k?"on":""}" data-k="${k}">${l}${pSort===k?" ▾":""}</th>`).join("") + `</tr>` +
     list.map(p => `<tr><td class="team">${esc(p.name)} <span class="muted small">${esc(p.pos)}</span></td><td>${p.gp}</td><td>${p.g}</td><td>${p.a}</td><td><b>${p.p}</b></td><td>${p.pm > 0 ? "+" : ""}${p.pm}</td><td>${p.ppg ?? "–"}</td><td>${p.sog ?? "–"}</td><td>${p.shp == null ? "–" : p.shp.toFixed(1)}</td><td>${p.p60 == null ? "–" : p.p60.toFixed(1)}</td><td>${toi(p.toi)}</td></tr>`).join("") + `</table></div><div class="muted small" style="margin-top:6px">SH% = goals ÷ shots. P/60 = points per 60 minutes on ice. Swipe the table sideways for more.</div></div>`;
   if (D.goalies.length){
-    h += `<div class="card"><h2>Goalies</h2><table class="ptab"><tr><th>Goalie</th><th>GP</th><th>Record</th><th>SV%</th><th>GAA</th></tr>` +
-      D.goalies.map(g => `<tr><td class="team">${esc(g.name)}</td><td>${g.gp}</td><td>${g.w}-${g.l}-${g.otl}</td><td>${g.svp != null ? g.svp.toFixed(3).replace(/^0/,"") : "–"}</td><td>${g.gaa != null ? g.gaa.toFixed(2) : "–"}</td></tr>`).join("") + `</table></div>`;
+    h += `<div class="card"><h2>Goalies</h2><table class="ptab"><tr><th>Goalie</th><th>GP</th><th>Record</th><th>SV%</th><th>GAA</th><th>GSAx</th></tr>` +
+      D.goalies.map(g => `<tr><td class="team">${esc(g.name)}</td><td>${g.gp}</td><td>${g.w}-${g.l}-${g.otl}</td><td>${g.svp != null ? g.svp.toFixed(3).replace(/^0/,"") : "–"}</td><td>${g.gaa != null ? g.gaa.toFixed(2) : "–"}</td><td>${g.gsax != null ? (g.gsax > 0 ? "+" : "") + g.gsax.toFixed(1) : "–"}</td></tr>`).join("") + `</table><div class="muted small" style="margin-top:6px">GSAx = goals saved above expected. More in Stats › Player analytics.</div></div>`;
   }
+  h = injuryCard() + h;
   const el = $("#t-players"); el.innerHTML = h || `<div class="card muted">No player stats right now.</div>`;
   el.querySelectorAll("th.sort").forEach(th => th.onclick = () => { pSort = th.dataset.k; players(); });
 }
 
+let statView = "ranks";
+const signed = (v, dp=1) => v == null ? "–" : (v > 0 ? "+" : "") + v.toFixed(dp);
+const pct = v => v == null ? "–" : (v * 100).toFixed(1);
+function rankRows(list, tap){
+  return list.map(r => {
+    const inner = `<div class="lbl">${esc(r.label)}${r.rank ? `<div class="bar"><i style="width:${Math.max(4, 100 * (r.of - r.rank + 1) / r.of)}%"></i></div>` : ""}</div>
+      <div class="val">${esc(r.value)}</div><div class="rk">${r.rank ? ord(r.rank) : "–"}</div>`;
+    return tap && r.note ? `<details class="an"><summary class="rank">${inner}</summary><div class="muted small" style="padding:0 0 10px">${esc(r.note)}</div></details>`
+                         : `<div class="rank">${inner}</div>`;
+  }).join("");
+}
 function ranks(){
-  let h = `<div class="card"><h2>League ranks</h2>`;
-  if (!D.ranks.length) h += `<div class="muted">Team stats aren't available right now.</div>`;
-  h += D.ranks.map(r => `<div class="rank"><div class="lbl">${esc(r.label)}<div class="bar"><i style="width:${Math.max(4, 100 * (r.of - r.rank + 1) / r.of)}%"></i></div></div>
-     <div class="val">${esc(r.value)}</div><div class="rk">${ord(r.rank)}</div></div>`).join("");
-  h += `<div class="muted small" style="margin-top:8px">Rank out of ${D.ranks[0] ? D.ranks[0].of : 32} teams. Longer bar = better.</div></div>`;
-  if (D.analytics && D.analytics.length){
-    h += `<div class="card"><h2>Analytics</h2>` + D.analytics.map(r => `<details class="an"><summary class="rank"><div class="lbl">${esc(r.label)}${r.rank ? `<div class="bar"><i style="width:${Math.max(4, 100 * (r.of - r.rank + 1) / r.of)}%"></i></div>` : ""}</div>
-      <div class="val">${esc(r.value)}</div><div class="rk">${r.rank ? ord(r.rank) : "–"}</div></summary><div class="muted small" style="padding:0 0 10px">${esc(r.note)}</div></details>`).join("") +
-      `<div class="muted small" style="margin-top:8px">Tap any row for what it means.</div></div>`;
+  let h = `<div class="seg">
+    <button data-v="ranks" class="${statView==="ranks"?"on":""}">Ranks</button>
+    <button data-v="team" class="${statView==="team"?"on":""}">Team analytics</button>
+    <button data-v="players" class="${statView==="players"?"on":""}">Player analytics</button></div>`;
+  if (statView === "ranks"){
+    h += `<div class="card"><h2>League ranks</h2>` + (D.ranks.length ? rankRows(D.ranks) : `<div class="muted">Team stats aren't available right now.</div>`) +
+      `<div class="muted small" style="margin-top:8px">Rank out of 32 teams. Longer bar = better.</div></div>`;
+  } else if (statView === "team"){
+    const adv = D.teamAdv || [], an = D.analytics || [];
+    if (adv.length) h += `<div class="card"><h2>Expected goals & chances</h2>${rankRows(adv, true)}<div class="muted small" style="margin-top:8px">Tap any row for what it means. Data: MoneyPuck.com</div></div>`;
+    if (an.length) h += `<div class="card"><h2>Possession & luck</h2>${rankRows(an, true)}<div class="muted small" style="margin-top:8px">Tap any row for what it means. Data: NHL.com</div></div>`;
+    if (!adv.length && !an.length) h += `<div class="card muted">Team analytics aren't available right now.</div>`;
+  } else {
+    h += playerAdv();
   }
-  $("#t-ranks").innerHTML = h;
+  const el = $("#t-ranks"); el.innerHTML = h;
+  el.querySelectorAll(".seg button").forEach(b => b.onclick = () => { statView = b.dataset.v; ranks(); });
+  el.querySelectorAll("th.asort").forEach(th => th.onclick = () => { aSort = th.dataset.k; ranks(); });
+}
+let aSort = "xgf";
+function playerAdv(){
+  const P = (D.playerAdv || []).filter(p => p.gp >= 3);
+  let h = "";
+  const G = (D.goalies || []).filter(g => g.gsax != null || g.gsaa != null);
+  if (G.length){
+    h += `<div class="card"><h2>Goalies</h2><div class="pscroll"><table class="ptab"><tr><th>Goalie</th><th>GP</th><th>GSAx</th><th>NHL</th><th>GSAA</th><th>NHL</th><th>HD SV%</th></tr>` +
+      G.map(g => `<tr><td class="team">${esc(g.name)}</td><td>${g.gp}</td><td><b>${signed(g.gsax)}</b></td><td class="muted">${g.gsaxRank ? ord(g.gsaxRank) : "–"}</td><td>${signed(g.gsaa)}</td><td class="muted">${g.gsaaRank ? ord(g.gsaaRank) : "–"}</td><td>${g.hdsv == null ? "–" : g.hdsv.toFixed(3).replace(/^0/,"")}</td></tr>`).join("") +
+      `</table></div><div class="muted small" style="margin-top:6px"><b>GSAx</b>: goals saved above expected. Weighs each shot by how dangerous it was (MoneyPuck). <b>GSAA</b>: goals saved compared to an average NHL goalie facing the same number of shots. <b>HD SV%</b>: save % on high-danger shots. Ranks are among goalies with 5+ games.</div></div>`;
+  }
+  if (!P.length) return h + `<div class="card muted">Player analytics (MoneyPuck) aren't available right now.</div>`;
+  const best = (k, dir=1) => P.filter(p => p[k] != null && p.gp >= 5).sort((a,b) => dir * (b[k] - a[k]))[0];
+  const cards = [
+    ["Drives play", best("xgfRel"), p => `${signed(p.xgfRel*100)} rel xGF%`],
+    ["Hot hand", best("fin"), p => `${signed(p.fin)} goals vs. expected`],
+    ["Due for some luck", best("fin", -1), p => `${signed(p.fin)} goals vs. expected`],
+    ["Most dangerous shooter", best("ixg"), p => `${p.ixg.toFixed(1)} expected goals`],
+  ].filter(c => c[1]);
+  if (cards.length) h += `<div class="card"><h2>Standouts</h2>` + cards.map(([t,p,f]) => `<div class="rank"><div class="lbl">${t}<div class="muted small">${esc(p.name)}</div></div><div style="text-align:right;font-weight:700">${f(p)}</div></div>`).join("") + `</div>`;
+  const cols = [["gp","GP"],["toi","TOI"],["cf","CF%"],["cfRel","Rel"],["xgf","xGF%"],["xgfRel","Rel"],["ixg","ixG"],["fin","G-ixG"],["hd","HD"],["gs","GS/GP"]];
+  const toi = s => s == null ? "–" : Math.floor(s/60) + ":" + String(Math.round(s%60)).padStart(2,"0");
+  const list = P.slice().sort((a,b) => (b[aSort] ?? -99) - (a[aSort] ?? -99));
+  h += `<div class="card"><h2>Skaters</h2><div class="muted small" style="margin:-4px 0 6px">Tap a column to sort. Swipe sideways for more.</div><div class="pscroll"><table class="ptab"><tr><th>Player</th>` +
+    cols.map(([k,l]) => `<th class="asort sort ${aSort===k?"on":""}" data-k="${k}">${l}${aSort===k?" ▾":""}</th>`).join("") + `</tr>` +
+    list.map(p => `<tr><td class="team">${esc(p.name)} <span class="muted small">${esc(p.pos)}</span></td><td>${p.gp}</td><td>${toi(p.toi)}</td><td>${pct(p.cf)}</td><td class="muted">${p.cfRel == null ? "–" : signed(p.cfRel*100)}</td><td><b>${pct(p.xgf)}</b></td><td class="muted">${p.xgfRel == null ? "–" : signed(p.xgfRel*100)}</td><td>${p.ixg == null ? "–" : p.ixg.toFixed(1)}</td><td>${signed(p.fin)}</td><td>${p.hd == null ? "–" : p.hd}</td><td>${p.gs == null ? "–" : p.gs.toFixed(2)}</td></tr>`).join("") +
+    `</table></div><div class="muted small" style="margin-top:8px;line-height:1.5">
+      <b>CF%</b> Corsi: share of shot attempts while he's on the ice (5v5). <b>xGF%</b>: share of expected goals while he's on the ice (5v5).
+      <b>Rel</b>: how much better the team does with him on the ice than off it. <b>ixG</b>: his own expected goals.
+      <b>G-ixG</b>: goals minus expected (positive = finishing above his chances). <b>HD</b>: his high-danger shots.
+      <b>GS/GP</b>: game score per game, an all-in-one rating. Data: MoneyPuck.com</div></div>`;
+  return h;
+}
+
+function injuryCard(){
+  const I = D.injuries || [];
+  if (!I.length) return "";
+  const when = i => i.ret ? "Expected back ~" + new Date(i.ret + (i.ret.length === 10 ? "T12:00:00" : "")).toLocaleDateString("en-US",{month:"short",day:"numeric"}) : "Return: not given";
+  return `<div class="card"><h2>Injuries</h2>` + I.map(i => `<div class="rank" style="align-items:flex-start"><div class="lbl"><b>${esc(i.name)}</b> <span class="muted small">${esc(i.pos || "")}</span>
+      <div class="muted small">${esc([i.side, i.injury].filter(Boolean).join(" ") || "Undisclosed")}</div>
+      ${i.comment ? `<div class="small" style="margin-top:3px">${esc(i.comment)}</div>` : ""}</div>
+      <div style="text-align:right;min-width:110px"><span class="pill ${/reserve|out/i.test(i.status || "") ? "live" : "gold"}">${esc(i.status || "")}</span><div class="muted small" style="margin-top:4px">${when(i)}</div></div></div>`).join("") +
+    `<div class="muted small" style="margin-top:8px">From ESPN's injury report. Return dates are estimates.</div></div>`;
 }
 
 function schedRow(g){
@@ -339,7 +402,7 @@ function render(){
   const t = D.team;
   $("#sub").textContent = t ? `${rec(t)} · ${t.pts} pts · ${ord(t.divRank)} in ${t.div}` : "";
   const u = new Date(D.updated);
-  $("#foot").textContent = "Updated " + u.toLocaleString("en-US",{timeZone:TZ,weekday:"short",hour:"numeric",minute:"2-digit"}) + " · data from NHL.com";
+  $("#foot").textContent = "Updated " + u.toLocaleString("en-US",{timeZone:TZ,weekday:"short",hour:"numeric",minute:"2-digit"}) + " · data: NHL.com, MoneyPuck.com, ESPN";
   home(); standings(); league(); ranks(); players(); schedule();
 }
 
