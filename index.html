@@ -93,6 +93,18 @@ nav button{flex:1;border:0;background:none;height:var(--tabh);color:var(--muted)
 nav button svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
 nav button.on{color:var(--green)}
 @media (prefers-color-scheme: dark){nav button.on{color:var(--win)}}
+.watch{display:flex;gap:10px;padding:10px 0;border-top:1px solid var(--line);align-items:flex-start}
+.watch:first-of-type{border-top:0}
+.watch .tm{width:58px;flex:none;font-size:12.5px;color:var(--muted);padding-top:1px}
+.watch .mu{font-weight:750}
+.dayhd{font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin:12px 0 2px}
+.dayhd:first-of-type{margin-top:0}
+th.sort{cursor:pointer} th.sort.on{color:var(--ink)}
+.ptab td,.ptab th{padding:7px 3px;font-size:12.5px}
+.pscroll{overflow-x:auto;margin:0 -14px;padding:0 14px}
+.ptab td.team{max-width:118px}
+.an{border-top:1px solid var(--line)} .an:first-of-type{border-top:0}
+.an summary{list-style:none;cursor:pointer;border-top:0} .an summary::-webkit-details-marker{display:none}
 .foot{text-align:center;color:var(--muted);font-size:12px;margin:6px 0 4px}
 .err{background:#fff3cd;color:#664d03;border-radius:10px;padding:10px;margin-bottom:12px;font-size:13px;display:none}
 </style>
@@ -109,6 +121,7 @@ nav button.on{color:var(--green)}
   <section class="tab" id="t-league"></section>
   <section class="tab" id="t-ranks"></section>
   <section class="tab" id="t-schedule"></section>
+  <section class="tab" id="t-players"></section>
   <div class="foot" id="foot"></div>
 </main>
 <nav>
@@ -116,6 +129,7 @@ nav button.on{color:var(--green)}
   <button data-t="standings"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg>Standings</button>
   <button data-t="league"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.5 2.5 2.5 14.5 0 17M12 3.5c-2.5 2.5-2.5 14.5 0 17"/></svg>League</button>
   <button data-t="ranks"><svg viewBox="0 0 24 24"><path d="M5 20V11M12 20V4M19 20v-6"/></svg>Ranks</button>
+  <button data-t="players"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19c.6-3.2 2.8-5 5.5-5s4.9 1.8 5.5 5"/><circle cx="17" cy="9" r="2.5"/><path d="M15.5 14.2c2.4-.3 4.4 1.2 5 4.8"/></svg>Players</button>
   <button data-t="schedule"><svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15" rx="2"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>Schedule</button>
 </nav>
 <script>
@@ -182,18 +196,16 @@ function home(){
       ${n.tv && n.tv.length ? `<div class="muted small">TV: ${esc(n.tv.join(", "))}</div>` : ""}</div>
       ${isToday(n.start) ? `<span class="pill gold">Game day</span>` : ""}</div></div>`;
   }
+  // Rival games tonight
+  h += watchCard((D.watch || []).filter(w => isToday(w.start)), "Games to watch tonight");
   // Recent
   if (D.recent.length){
     h += `<div class="card"><h2>Last 3</h2>` + D.recent.slice(0,3).map(schedRow).join("") + `</div>`;
   }
   // Scorers
   if (D.skaters.length){
-    h += `<div class="card"><h2>Top scorers</h2><table><tr><th>Player</th><th>GP</th><th>G</th><th>A</th><th>P</th><th>+/-</th></tr>` +
-      D.skaters.slice(0,6).map(p => `<tr><td class="team">${esc(p.name)} <span class="muted small">${esc(p.pos)}</span></td><td>${p.gp}</td><td>${p.g}</td><td>${p.a}</td><td><b>${p.p}</b></td><td>${p.pm > 0 ? "+" : ""}${p.pm}</td></tr>`).join("") + `</table></div>`;
-  }
-  if (D.goalies.length){
-    h += `<div class="card"><h2>Goalies</h2><table><tr><th>Goalie</th><th>GP</th><th>Record</th><th>SV%</th><th>GAA</th></tr>` +
-      D.goalies.map(g => `<tr><td class="team">${esc(g.name)}</td><td>${g.gp}</td><td>${g.w}-${g.l}-${g.otl}</td><td>${g.svp != null ? g.svp.toFixed(3).replace(/^0/,"") : "–"}</td><td>${g.gaa != null ? g.gaa.toFixed(2) : "–"}</td></tr>`).join("") + `</table></div>`;
+    h += `<div class="card"><div class="row"><h2 class="grow">Top scorers</h2><a class="small" style="color:var(--muted)" href="#" onclick="document.querySelector('nav button[data-t=players]').click();return false">All players ›</a></div><table><tr><th>Player</th><th>GP</th><th>G</th><th>A</th><th>P</th><th>+/-</th></tr>` +
+      D.skaters.slice(0,5).map(p => `<tr><td class="team">${esc(p.name)} <span class="muted small">${esc(p.pos)}</span></td><td>${p.gp}</td><td>${p.g}</td><td>${p.a}</td><td><b>${p.p}</b></td><td>${p.pm > 0 ? "+" : ""}${p.pm}</td></tr>`).join("") + `</table></div>`;
   }
   el.innerHTML = h;
 }
@@ -250,6 +262,7 @@ function league(){
   let h = `<div class="seg"><button data-v="last" class="${leagueView==="last"?"on":""}">Last night</button><button data-v="tonight" class="${leagueView==="tonight"?"on":""}">Today</button></div>`;
   const rivalGames = list.filter(g => !g.ours && (g.rivalAway || g.rivalHome));
   const other = list.filter(g => g.ours || !(g.rivalAway || g.rivalHome));
+  h += watchCard((D.watch || []).filter(w => !isToday(w.start)).slice(0, 12), "Games to watch this week");
   if (!list.length) h += `<div class="card muted">No games ${leagueView === "last" ? "last night" : "today"}.</div>`;
   if (rivalGames.length) h += `<div class="card"><h2>Rival watch</h2>${rivalGames.map(gameRow).join("")}
      <div class="muted small" style="margin-top:8px"><span class="rv" style="margin:0">●</span> = Central team, or a West team within 8 points of the Wild</div></div>`;
@@ -258,15 +271,51 @@ function league(){
   el.querySelectorAll(".seg button").forEach(b => b.onclick = () => { leagueView = b.dataset.v; league(); });
 }
 
+function watchRow(w){
+  const tg = w.tags.map(t => `${esc(t.team)} ${esc(t.where)}`).join(" · ");
+  return `<div class="watch"><div class="tm">${fmtTime(w.start)}</div><div class="grow">
+    <div class="mu">${esc(w.away)} @ ${esc(w.home)} ${w.big ? '<span class="pill gold">Big one</span>' : ""}</div>
+    <div class="muted small">${tg}</div>
+    ${w.root ? `<div class="root muted">Root for <b style="color:var(--ink)">${esc(w.root)}</b> (in regulation)</div>` : ""}</div></div>`;
+}
+function watchCard(list, title){
+  if (!list.length) return "";
+  let h = `<div class="card"><h2>${title}</h2>`, last = "";
+  list.forEach(w => {
+    const day = isToday(w.start) ? "Tonight" : fmtDay(w.start);
+    if (day !== last && title !== "Games to watch tonight"){ h += `<div class="dayhd">${day}</div>`; last = day; }
+    h += watchRow(w);
+  });
+  return h + `<div class="muted small" style="margin-top:8px">Games between teams near the Wild in the standings. "Big one" = both teams are rivals.</div></div>`;
+}
+
+let pSort = "p";
+function players(){
+  const cols = [["gp","GP"],["g","G"],["a","A"],["p","P"],["pm","+/-"],["ppg","PPG"],["sog","SOG"],["shp","SH%"],["p60","P/60"],["toi","TOI"]];
+  const toi = s => s == null ? "–" : Math.floor(s/60) + ":" + String(Math.round(s%60)).padStart(2,"0");
+  D.skaters.forEach(p => { p.shp = p.sog ? 100 * p.g / p.sog : null; p.p60 = p.toi && p.gp ? p.p / (p.toi * p.gp / 3600) : null; });
+  const list = D.skaters.slice().sort((a,b) => (b[pSort] ?? -1) - (a[pSort] ?? -1) || b.p - a.p);
+  let h = `<div class="card"><h2>Skaters</h2><div class="muted small" style="margin:-4px 0 6px">Tap a column to sort.</div><div class="pscroll"><table class="ptab"><tr><th>Player</th>` +
+    cols.map(([k,l]) => `<th class="sort ${pSort===k?"on":""}" data-k="${k}">${l}${pSort===k?" ▾":""}</th>`).join("") + `</tr>` +
+    list.map(p => `<tr><td class="team">${esc(p.name)} <span class="muted small">${esc(p.pos)}</span></td><td>${p.gp}</td><td>${p.g}</td><td>${p.a}</td><td><b>${p.p}</b></td><td>${p.pm > 0 ? "+" : ""}${p.pm}</td><td>${p.ppg ?? "–"}</td><td>${p.sog ?? "–"}</td><td>${p.shp == null ? "–" : p.shp.toFixed(1)}</td><td>${p.p60 == null ? "–" : p.p60.toFixed(1)}</td><td>${toi(p.toi)}</td></tr>`).join("") + `</table></div><div class="muted small" style="margin-top:6px">SH% = goals ÷ shots. P/60 = points per 60 minutes on ice. Swipe the table sideways for more.</div></div>`;
+  if (D.goalies.length){
+    h += `<div class="card"><h2>Goalies</h2><table class="ptab"><tr><th>Goalie</th><th>GP</th><th>Record</th><th>SV%</th><th>GAA</th></tr>` +
+      D.goalies.map(g => `<tr><td class="team">${esc(g.name)}</td><td>${g.gp}</td><td>${g.w}-${g.l}-${g.otl}</td><td>${g.svp != null ? g.svp.toFixed(3).replace(/^0/,"") : "–"}</td><td>${g.gaa != null ? g.gaa.toFixed(2) : "–"}</td></tr>`).join("") + `</table></div>`;
+  }
+  const el = $("#t-players"); el.innerHTML = h || `<div class="card muted">No player stats right now.</div>`;
+  el.querySelectorAll("th.sort").forEach(th => th.onclick = () => { pSort = th.dataset.k; players(); });
+}
+
 function ranks(){
   let h = `<div class="card"><h2>League ranks</h2>`;
   if (!D.ranks.length) h += `<div class="muted">Team stats aren't available right now.</div>`;
   h += D.ranks.map(r => `<div class="rank"><div class="lbl">${esc(r.label)}<div class="bar"><i style="width:${Math.max(4, 100 * (r.of - r.rank + 1) / r.of)}%"></i></div></div>
      <div class="val">${esc(r.value)}</div><div class="rk">${ord(r.rank)}</div></div>`).join("");
   h += `<div class="muted small" style="margin-top:8px">Rank out of ${D.ranks[0] ? D.ranks[0].of : 32} teams. Longer bar = better.</div></div>`;
-  if (D.skaters.length){
-    h += `<div class="card"><h2>All skaters</h2><table><tr><th>Player</th><th>GP</th><th>G</th><th>A</th><th>P</th><th>+/-</th></tr>` +
-      D.skaters.map(p => `<tr><td class="team">${esc(p.name)} <span class="muted small">${esc(p.pos)}</span></td><td>${p.gp}</td><td>${p.g}</td><td>${p.a}</td><td><b>${p.p}</b></td><td>${p.pm > 0 ? "+" : ""}${p.pm}</td></tr>`).join("") + `</table></div>`;
+  if (D.analytics && D.analytics.length){
+    h += `<div class="card"><h2>Analytics</h2>` + D.analytics.map(r => `<details class="an"><summary class="rank"><div class="lbl">${esc(r.label)}${r.rank ? `<div class="bar"><i style="width:${Math.max(4, 100 * (r.of - r.rank + 1) / r.of)}%"></i></div>` : ""}</div>
+      <div class="val">${esc(r.value)}</div><div class="rk">${r.rank ? ord(r.rank) : "–"}</div></summary><div class="muted small" style="padding:0 0 10px">${esc(r.note)}</div></details>`).join("") +
+      `<div class="muted small" style="margin-top:8px">Tap any row for what it means.</div></div>`;
   }
   $("#t-ranks").innerHTML = h;
 }
@@ -291,7 +340,7 @@ function render(){
   $("#sub").textContent = t ? `${rec(t)} · ${t.pts} pts · ${ord(t.divRank)} in ${t.div}` : "";
   const u = new Date(D.updated);
   $("#foot").textContent = "Updated " + u.toLocaleString("en-US",{timeZone:TZ,weekday:"short",hour:"numeric",minute:"2-digit"}) + " · data from NHL.com";
-  home(); standings(); league(); ranks(); schedule();
+  home(); standings(); league(); ranks(); players(); schedule();
 }
 
 let timer = null;
